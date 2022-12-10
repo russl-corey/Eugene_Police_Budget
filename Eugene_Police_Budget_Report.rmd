@@ -1,0 +1,220 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+<!-- # Filename: Eugene_Police_Budget_Report.rmd -->
+
+<!-- # Author: @russl_corey -->
+
+<!-- # Date: oct 10, 2022 -->
+
+<!-- # This program is free software: you can redistribute it and/or modify it under  -->
+
+<!-- # the terms of the GNU General Public License as published by the Free Software  -->
+
+<!-- # Foundation, either version 3 of the License, or (at your option) any later  -->
+
+<!-- # version. -->
+
+<!-- #  -->
+
+<!-- # This program is distributed in the hope that it will be useful, but WITHOUT ANY  -->
+
+<!-- # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A  -->
+
+<!-- # PARTICULAR PURPOSE. See the GNU General Public License for more details. -->
+
+<!-- # You should have received a copy of the GNU General Public License along with  -->
+
+<!-- # this program. If not, see <https://www.gnu.org/licenses/>.  -->
+
+---
+title: "Eugene, Oregon Police Budget"
+author: Russell_Corey
+date: December, 8 2022
+output: html_document
+---
+
+\newpage
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(ggplot2)
+library(readr)
+library(scales)
+library(dbplyr)
+```
+
+```{r Load Data, echo=FALSE, message=FALSE, warning=FALSE}
+setwd('/home/russell/Dropbox/DataAnalysis/Eugene_Police')
+source("police_budget.r")
+```
+
+```{r Load Offenses Data, echo=FALSE, message=FALSE, warning=FALSE}
+setwd('/home/russell/Dropbox/DataAnalysis/Eugene_Police')
+source('OpenData-Offenses-All.r')
+```
+# Intro
+
+ Source code will be posted on [Github](https://github.com/russl-corey/Oregon_Crime)
+
+# Data
+
+"Open Budget Eugene"
+
+    https://budget.eugene-or.gov/#!/year/2018/operating/0/department/Police/0/service?vis=barChart
+
+\newpage
+
+# Plots
+
+
+
+```{r Plot Police Budget, echo=FALSE, message=FALSE, results='asis'}
+
+
+
+ggplot() +
+  labs(y='Dollars', title="Eugene Police Adopted Budget") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+  geom_line(data=budget[budget$Department == 'Police',], 
+            aes(x=year, y=`Adopted Budget`, color='Police'))+
+  scale_y_continuous(labels = comma)
+  # geom_line(data=budget_all[budget_all$Department == 'Public Works',], 
+  #           aes(x=year, y=`Adopted Budget`, color='Public Works'))+
+  # geom_line(data=budget_all[budget_all$Department == 'Fire and Emergency Medical Services',], 
+  #           aes(x=year, y=`Adopted Budget`, color='Fire and Emergency Medical Services'))+
+  # geom_line(data=budget_all[budget_all$Department == 'Library  Recreation and Cultural Services',], 
+  #           aes(x=year, y=`Adopted Budget`, color='Library  Recreation and Cultural Services'))
+
+budget %>%
+  filter(Department == 'Police') %>%
+  dplyr::select(c('year', 'Adopted Budget')) %>%
+  kable(caption = 'Police Budget', format.args = list(big.mark = ",",
+  scientific = FALSE))
+
+budget_police %>%
+  filter(Service == 'Patrol') %>%
+  dplyr::select(c('year', 'Adopted Budget')) %>%
+  kable(caption = 'Police Patrol Budget', format.args = list(big.mark = ",",
+  scientific = FALSE))
+
+```
+
+
+
+```{r Plot Police Budget Increase, echo=FALSE, results = 'asis', warning=FALSE, }
+
+data <- budget %>%
+  filter(Department == 'Police') %>%
+  dplyr::select('year', 'budget_increase') 
+
+  barplot(data$budget_increase,
+          main="Budget increase over previous year",
+          names.arg = data$year,
+          ylab='dollars',
+          las =2,
+          cex.names = 0.7,
+          format.args = list(big.mark = ",",
+  scientific = FALSE)
+)
+#   
+# data <- budget %>%
+#   filter(Department == 'Police') %>%
+#   dplyr::select('year', 'budget_increase_percnt') 
+# 
+#   barplot(data$budget_increase,
+#           main="Budget increase over previous year",
+#           names.arg = data$year,
+#           ylab='% increase',
+#           las =2,
+#           cex.names = 0.7
+# )
+
+```
+
+
+```{r Plot Eugene Arrests, echo=FALSE, message=FALSE, results='asis'}
+
+violent_titles <- c("Aggravated Assault",
+                    "Forcible Rape", 
+                    "Forcible Sodomy", 
+                    "Robbery",
+                    'Willful Murder')
+# Set the working directory to where the data sets are located
+folder <- "~/Documents/Oregon_Crime_Report/"
+
+# Load data
+arrests <- read_csv("~/Documents/Eugene_Police/data/OpenData-Arrests-All.csv")
+
+# Format data
+arrests$agency <- tolower(arrests$`Agency Name`)
+arrests$date <- as.Date(arrests$Date, format = "%m/%d/%Y", origin="1900-01-01")
+
+
+arrests[grep('eugene', arrests$agency),] %>%
+  group_by(month=floor_date(date, 'month')) %>%
+  summarize(arrests = sum(`Distinct Arrest Offenses`)) %>%
+  ggplot() +
+  labs(y='arrests', title="Eugene Police Arrests") +
+  scale_x_date(date_labels = "%Y", date_breaks = "6 month") +
+  scale_y_continuous(labels = comma)+
+  geom_line(aes(x=month, y=arrests, color='Total Arrests'))
+  
+
+```
+
+```{r Plot Eugene Offenses, echo=FALSE, message=FALSE}
+
+eugene_o <- offenses[grep('eugene', offenses$agency), ]
+
+o_month <- eugene_o %>%
+  group_by(month=floor_date(date, 'month')) %>%
+  summarize(o_sum = sum(`Distinct Offenses`))
+
+vo_month <- eugene_o %>%
+  filter(vo == 1) %>%
+  group_by(month=floor_date(date, 'month')) %>%
+  summarize(vo_sum = sum(`Distinct Offenses`))
+
+ggplot() +
+  labs(y='Dollars', title="Eugene Distinct Offenses") +
+  scale_x_date(date_labels = "%Y", date_breaks = "6 month") +
+  geom_line(data=o_month, aes(x=month, y=o_sum, color='All Offenses'))+
+  geom_line(data=vo_month, aes(x=month, y=vo_sum, color='Violent Offenses'))+
+  scale_y_continuous(labels = comma)
+
+eugene_o  %>%
+  head() %>%
+  kable(caption = 'Police Budget', format.args = list(big.mark = ",",
+  scientific = FALSE))
+
+```
+
+
+\newpage
+
+# Sources
+
+#### Eugene Police Budget
+
+"Open Budget Eugene"
+
+    https://budget.eugene-or.gov/#!/year/2018/operating/0/department/Police/0/service?vis=barChart
+
+
+
+
+
+
+\newpage
+
+# Appendix B
+
+source code available at <https://github.com/russl-corey/Oregon_Crime>
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see [\<https://www.gnu.org/licenses/\>](https://www.gnu.org/licenses/).
